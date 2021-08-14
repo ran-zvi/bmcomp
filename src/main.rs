@@ -4,6 +4,7 @@ pub mod types;
 pub mod traits;
 pub mod encode;
 pub mod decode;
+mod tests;
 
 fn main() {
 

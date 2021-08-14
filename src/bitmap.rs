@@ -1,3 +1,4 @@
+use crate::lib::trim_binary_number;
 use crate::traits::Encode;
 use crate::types::{BitMapError, Hex, Result};
 
@@ -37,16 +38,41 @@ impl BitMap {
             return Err(BitMapError::Decode("String too short".into()).into());
         }
         let character = char::from_u32(u32::from_str_radix(&s[0..2], 16)?).unwrap();
-        let map = &s[2..s_len as usize]
+        let mut map = &s[2..s_len as usize]
             .chars()
             .map(|h| crate::lib::to_binary(h))
             .collect::<String>()
             .chars()
             .map(|n| n.to_digit(2).unwrap() as u8)
-            .collect::<Vec<u8>>()[..expected_length];
+            .collect::<Vec<u8>>();
+        let remainder = expected_length % 4;
+        let map = match remainder {
+            0 => map.to_owned(),
+            _ => {
+                let bits_to_remove = 4 - remainder as u8;
+                let last_4_bits = {
+                    if expected_length >= 4 {
+                        map[(map.len() - 4)..].to_vec()
+                    } else {
+                        map.to_vec()
+                    }
+                };
+                let last_4_bits = &trim_binary_number(&last_4_bits, bits_to_remove);
+                if expected_length < 4 {
+                    last_4_bits.to_vec()
+                } else {
+                    map[..map.len() - 4]
+                        .to_vec()
+                        .iter()
+                        .chain(last_4_bits)
+                        .cloned()
+                        .collect::<Vec<_>>()
+                }
+            }
+        };
 
         Ok(BitMap {
-            map: map.to_vec(),
+            map: map,
             character,
         })
     }
@@ -130,6 +156,33 @@ mod tests {
         let s = "61971e";
         let bitmap = BitMap::from_str(&s, 15).unwrap();
         let expected = BitMap::new("abbabaaabbbaaaa", 'a');
+
+        assert_eq!(bitmap, expected);
+    }
+
+    #[test]
+    fn test_bitmap_from_str_variant_size_2() {
+        let s = "63007";
+        let bitmap = BitMap::from_str(&s, 11).unwrap();
+        let expected = BitMap::new("aaa bbb ccc", 'c');
+
+        assert_eq!(bitmap, expected);
+    }
+
+    #[test]
+    fn test_bitmap_from_str_variant_size_3() {
+        let s = "63003";
+        let bitmap = BitMap::from_str(&s, 10).unwrap();
+        let expected = BitMap::new("aaa bbb cc", 'c');
+
+        assert_eq!(bitmap, expected);
+    }
+
+    #[test]
+    fn test_bitmap_from_str_variant_size_4() {
+        let s = "63001";
+        let bitmap = BitMap::from_str(&s, 9).unwrap();
+        let expected = BitMap::new("aaa bbb c", 'c');
 
         assert_eq!(bitmap, expected);
     }
